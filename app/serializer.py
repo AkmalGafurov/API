@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Category
+from .models import Category,Product, Image
+
 
 
 class ParentCategoryModelSreializer(serializers.ModelSerializer):
@@ -34,15 +35,16 @@ class CategorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Category
-        fields = (
+        fields = [
             'id',
             'title',
             'slug',
             'image',
             'parent',
             'parent_title',
-            'children',
-        )
+            'is_active',
+            'children'
+        ]
 
     def get_image(self, obj):
         request = self.context.get('request')
@@ -52,3 +54,21 @@ class CategorySerializer(serializers.ModelSerializer):
 
     def get_parent_title(self, obj):
         return obj.parent.title if obj.parent else None
+
+
+class ImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Image
+        fields = ['id', 'image']
+
+
+class ProductSerializer(serializers.ModelSerializer):
+    images = ImageSerializer(many=True, read_only=True) 
+    image_count = serializers.SerializerMethodField()    
+
+    class Meta:
+        model = Product
+        fields = ['id', 'name', 'price', 'images', 'image_count']
+
+    def get_image_count(self, obj):
+        return obj.images.count()

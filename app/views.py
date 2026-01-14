@@ -1,6 +1,11 @@
+from rest_framework import generics
 from rest_framework.generics import ListAPIView
 from .serializer import ParentCategoryModelSreializer,CategorySerializer
-from .models import Category
+from .models import Category,Product
+from .serializer import CategorySerializer, ProductSerializer
+from rest_framework.permissions import BasePermission
+from .permissions import CanUpdate4Hours
+from rest_framework.viewsets import ModelViewSet
 
 class ParentCategoryListApiView(ListAPIView):
     queryset = Category.objects.all()
@@ -23,7 +28,7 @@ class ChildrenCategoryByCategorySlug(ListAPIView):
             return Category.objects.none()
         return queryset.children.all()
     
-    
+
 
 class ParentCategoryListApiView(ListAPIView):
     serializer_class = CategorySerializer
@@ -38,3 +43,32 @@ class ParentCategoryListApiView(ListAPIView):
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
+
+
+class ProductViewSet(generics.RetrieveDestroyAPIView):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+    permission_classes = [CanUpdate4Hours]
+
+
+
+class CategoryListCreateView(generics.ListCreateAPIView):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+
+
+class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+
+
+
+class ProductListCreateView(generics.ListCreateAPIView):
+    queryset = Product.objects.select_related('category').prefetch_related('images')
+    serializer_class = ProductSerializer
+
+
+
+class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Product.objects.prefetch_related('images')
+    serializer_class = ProductSerializer
