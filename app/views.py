@@ -13,28 +13,51 @@ from rest_framework.response import Response
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+from django.core.cache import cache
+
 
 
 class ParentCategoryListApiView(ListAPIView):
-    queryset = Category.objects.all()
-    serializer_class = ParentCategoryModelSreializer
+    serializer_class = CategorySerializer
 
     def get_queryset(self):
-        queryset = Category.objects.filter(parent__isnull = True)
+        cache_key = "parent_categories_active"
+        queryset = cache.get(cache_key)
+
+        if queryset is None:
+            queryset = Category.objects.filter(
+                parent__isnull=True,
+                is_active=True
+            ).prefetch_related('children')
+            cache.set(cache_key, queryset, 60 * 10)  
+
         return queryset
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
 
 
 class ChildrenCategoryByCategorySlug(ListAPIView):
-    queryset = Category.objects.all()
     serializer_class = ParentCategoryModelSreializer
 
-
     def get_queryset(self):
-        category_slug = self.kwargs['slug']
-        queryset = Category.objects.filter(slug=category_slug).first()
-        if not queryset:
-            return Category.objects.none()
-        return queryset.children.all()
+        slug = self.kwargs['slug']
+        cache_key = f"children_category_{slug}"
+
+        children = cache.get(cache_key)
+        if children is None:
+            category = Category.objects.filter(slug=slug).first()
+            if not category:
+                return Category.objects.none()
+
+            children = category.children.all()
+            cache.set(cache_key, children, 60 * 10)
+
+        return children
+
     
 
 
@@ -72,17 +95,40 @@ class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class ProductListCreateView(generics.ListCreateAPIView):
-    queryset = Product.objects.select_related('category').prefetch_related('images')
     serializer_class = ProductSerializer
+
+    def get_queryset(self):
+        cache_key = "product_list"
+        queryset = cache.get(cache_key)
+
+        if queryset is None:
+            queryset = Product.objects.select_related('category').prefetch_related('images')
+            cache.set(cache_key, queryset, 60 * 5)
+
+        return queryset
+
 
 
 
 class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Product.objects.prefetch_related('images')
     serializer_class = ProductSerializer
-
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Product.objects.prefetch_related('images')
+
+    def get_object(self):
+        pk = self.kwargs['pk']
+        cache_key = f"product_detail_{pk}"
+
+        product = cache.get(cache_key)
+        if product is None:
+            product = super().get_object()
+            cache.set(cache_key, product, 60 * 5)  
+
+        return product
+
 
 
 class LogoutAPIView(APIView):
